@@ -1,0 +1,185 @@
+// Prisma Schema for Buddy Elder AI
+// Configured for Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ELDER
+  CAREGIVER
+  ADMIN
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  role         Role          @default(ELDER)
+  phone        String?
+  preferredLang String       @default("en") // "en", "hi", "mr"
+  fontSize     String        @default("large") // "normal", "large", "xlarge"
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  elderProfile    ElderProfile?
+  caregiverLinks  CaregiverLink[] @relation("CaregiverToElders")
+  elderLinks      CaregiverLink[] @relation("ElderToCaregivers")
+  conversations   Conversation[]
+  checkins        WellnessCheckin[]
+  lessonProgress  LessonProgress[]
+  caregiverNotes  CaregiverNote[] @relation("NotesAuthored")
+
+  @@map("users")
+}
+
+model ElderProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emergencyContact String?
+  emergencyPhone  String?
+  city            String?
+  medicalNotes    String?
+  dailyGoalSteps  Int      @default(2000)
+  waterGoalGlasses Int     @default(6)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("elder_profiles")
+}
+
+model CaregiverLink {
+  id          String   @id @default(uuid())
+  caregiverId String
+  caregiver   User     @relation("CaregiverToElders", fields: [caregiverId], references: [id], onDelete: Cascade)
+  elderId     String
+  elder       User     @relation("ElderToCaregivers", fields: [elderId], references: [id], onDelete: Cascade)
+  status      String   @default("ACTIVE") // ACTIVE, PENDING
+  createdAt   DateTime @default(now())
+
+  notes       CaregiverNote[]
+
+  @@unique([caregiverId, elderId])
+  @@map("caregiver_links")
+}
+
+model CaregiverNote {
+  id          String         @id @default(uuid())
+  linkId      String
+  link        CaregiverLink  @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User           @relation("NotesAuthored", fields: [authorId], references: [id], onDelete: Cascade)
+  title       String
+  content     String
+  createdAt   DateTime       @default(now())
+
+  @@map("caregiver_notes")
+}
+
+model Conversation {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String    @default("New Conversation")
+  language  String    @default("en") // "en", "hi", "mr"
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         String       // "user" | "buddy" | "system"
+  text           String
+  citations      String?      // JSON string of trusted source references
+  feedback       String?      // "thumbs_up" | "thumbs_down"
+  createdAt      DateTime     @default(now())
+
+  @@map("messages")
+}
+
+model Lesson {
+  id          String           @id @default(uuid())
+  slug        String           @unique
+  title       String
+  category    String           // "smartphone", "whatsapp", "payments", "safety", "computer"
+  summary     String
+  icon        String           @default("BookOpen")
+  order       Int              @default(1)
+  contentJson String           // Structured steps, tips, and quiz questions
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  progress    LessonProgress[]
+
+  @@map("lessons")
+}
+
+model LessonProgress {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completed   Boolean  @default(false)
+  quizScore   Int?
+  completedAt DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, lessonId])
+  @@map("lesson_progress")
+}
+
+model WellnessCheckin {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        String   // YYYY-MM-DD
+  mood        String   // "happy", "calm", "tired", "sad", "unwell"
+  waterGlasses Int     @default(0)
+  stepsTaken  Int      @default(0)
+  sleepHours  Float?
+  medicationTaken Boolean @default(true)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, date])
+  @@map("wellness_checkins")
+}
+
+model KnowledgeSource {
+  id            String          @id @default(uuid())
+  title         String
+  url           String
+  publisher     String          // e.g. "CERT-In", "RBI Kehta Hai", "NPCI UPI", "WhatsApp Help"
+  category      String          // "scam_prevention", "upi_safety", "whatsapp_guide", "health"
+  trustScore    Int             @default(100)
+  lastVerified  DateTime        @default(now())
+  summary       String
+  chunks        DocumentChunk[]
+
+  @@map("knowledge_sources")
+}
+
+model DocumentChunk {
+  id         String          @id @default(uuid())
+  sourceId   String
+  source     KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  content    String
+  keywords   String?         // Comma separated keywords for search
+  createdAt  DateTime        @default(now())
+
+  @@map("document_chunks")
+}

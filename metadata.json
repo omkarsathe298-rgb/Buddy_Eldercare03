@@ -1,0 +1,6 @@
+{
+  "name": "Buddy Elder AI",
+  "description": "Intelligent, patient, and accessible AI companion for elderly assistance, digital literacy, scam defense, and wellness.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
